@@ -1,0 +1,26 @@
+# Time-Aware Hybrid RAG System – Python dependencies
+# Python 3.11+
+
+# --- API Framework ---
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# --- PostgreSQL (async) ---
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+
+# --- Elasticsearch ---
+elasticsearch[async]>=8.13.0
+
+# --- Qdrant ---
+qdrant-client>=1.9.0
+
+# --- Embeddings ---
+sentence-transformers>=3.0.0
+
+# --- LLM ---
+openai>=1.30.0
+
+# --- Utilities ---
+pydantic>=2.7.0
+python-dotenv>=1.0.1
