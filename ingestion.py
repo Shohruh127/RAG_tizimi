@@ -12,6 +12,7 @@ All steps are attempted; errors are logged without aborting the whole batch.
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
 import uuid
@@ -77,20 +78,28 @@ def _date_to_ts(d: Optional[datetime.date]) -> Optional[float]:
 async def _expire_current_chunk(
     session: AsyncSession,
     doc_id: uuid.UUID,
-    chunk_text: str,
+    chunk_input: ChunkInput,
     expire_date: datetime.date,
 ) -> Optional[uuid.UUID]:
     """
-    Find the current chunk with matching *chunk_text* for *doc_id* and expire it
-    (SCD Type 2: set valid_to = expire_date, is_current = False).
+    Find the current chunk with matching *hierarchical_context* for *doc_id* and
+    expire it (SCD Type 2: set valid_to = expire_date, is_current = False).
 
     Returns the old chunk_id if one was found, otherwise None.
+
+    Note: if *chunk_input.hierarchical_context* is ``None`` the function returns
+    ``None`` immediately without touching the database (backward-compatibility
+    mode – chunks ingested without a structural identifier cannot be expired by
+    this mechanism).
     """
+    if chunk_input.hierarchical_context is None:
+        return None
+
     stmt = (
         select(ChunkORM)
         .where(
             ChunkORM.doc_id == doc_id,
-            ChunkORM.text == chunk_text,
+            ChunkORM.hierarchical_context == chunk_input.hierarchical_context,
             ChunkORM.is_current.is_(True),
         )
         .limit(1)
@@ -117,6 +126,7 @@ async def _save_chunk_to_postgres(
     orm = ChunkORM(
         doc_id=doc_id,
         text=chunk.text,
+        hierarchical_context=chunk.hierarchical_context,
         valid_from=chunk.valid_from,
         valid_to=None,
         is_current=True,
@@ -223,7 +233,7 @@ async def ingest_document(session: AsyncSession, payload: DocumentInput) -> Docu
     for chunk_input in payload.chunks:
         # --- SCD Type 2: expire existing version in PostgreSQL ----------
         old_pg_id: Optional[uuid.UUID] = await _expire_current_chunk(
-            session, doc_orm.doc_id, chunk_input.text, today
+            session, doc_orm.doc_id, chunk_input, today
         )
 
         # --- Insert new PostgreSQL row ----------------------------------
@@ -240,7 +250,7 @@ async def ingest_document(session: AsyncSession, payload: DocumentInput) -> Docu
 
         # --- Embed the text --------------------------------------------
         try:
-            vector = embed_text(chunk_input.text)
+            vector = await asyncio.to_thread(embed_text, chunk_input.text)
         except Exception as exc:
             logger.error(
                 "Embedding failed for chunk '%s': %s", new_chunk.chunk_id, exc

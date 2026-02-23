@@ -62,6 +62,10 @@ class ChunkORM(Base):
         UUID(as_uuid=True), ForeignKey("documents.doc_id"), nullable=False
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Structural identifier (e.g. article number / section path) used for SCD
+    # Type 2 matching: when a chunk is amended, the old row is found and expired
+    # by matching this field rather than the text content (which changes).
+    hierarchical_context: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     valid_from: Mapped[date] = mapped_column(Date, nullable=False)
     valid_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -80,6 +84,10 @@ class ChunkInput(BaseModel):
 
     text: str = Field(..., description="The text content of the chunk.")
     valid_from: date = Field(..., description="The date this chunk version became effective.")
+    hierarchical_context: Optional[str] = Field(
+        None,
+        description="Structural identifier (e.g. article number / section path) used for SCD Type 2 matching.",
+    )
 
 
 class DocumentInput(BaseModel):
